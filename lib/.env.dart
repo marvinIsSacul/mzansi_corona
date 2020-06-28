@@ -50,7 +50,7 @@ abstract class Env {
   /// Determines the current environment.
   /// This is the value you'd mostly be working with.
   ///
-  static const CURRENT = ENV_STAGING;
+  static const CURRENT = ENV_LOCAL;
 
   ///
   /// LIVE App Base URL.
@@ -65,7 +65,7 @@ abstract class Env {
   ///
   /// App Base Local URL.
   ///
-  static const APP_BASE_URL_LOCAL = '/';
+  static const APP_BASE_URL_LOCAL = 'http://10.0.2.2:8000/api/';
 
   ///
   /// The Staging environment base URL.

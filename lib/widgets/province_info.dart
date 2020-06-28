@@ -1,3 +1,4 @@
+
 ///
 /// Marvin Kagiso
 /// 18:36 2020/06/06
@@ -22,23 +23,27 @@ import 'package:flutter/material.dart';
 import 'package:percent_indicator/percent_indicator.dart';
 
 import '../models/province_info.dart';
+import '../models/country_info.dart';
+import '../providers/logger.dart';
+import '../helpers/styles.dart';
 
 
 /// Province Info Widget.
 class ProvinceInfoWidget extends StatelessWidget {
-  final double numTotal;
-  final ProvinceInfo info;
+  final CountryInfo countryInfo;
+  final ProvinceInfo provinceInfo;
   final Function onTap;
 
   ProvinceInfoWidget({
-    @required this.numTotal,
-    @required this.info,
+    @required this.countryInfo,
+    @required this.provinceInfo,
     this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final percentage = this.info.numInfections / this.numTotal * 100;
+    final percentage = this.provinceInfo.numInfections / this.countryInfo.numInfections * 100;
+    final provinceColour = Styles.provinceColour(this.provinceInfo);
 
     return Expanded(
       flex: 1,
@@ -49,7 +54,7 @@ class ProvinceInfoWidget extends StatelessWidget {
           padding: EdgeInsets.all(15.0),
           height: 200,
           decoration: BoxDecoration(
-            color: info.colour,
+            color: provinceColour,
             borderRadius: BorderRadius.circular(40.0),
           ),
           child: Column(
@@ -61,7 +66,7 @@ class ProvinceInfoWidget extends StatelessWidget {
                 child: CircularPercentIndicator(
                   animation: true,
                   radius: 75.0,
-                  percent: 0.5,
+                  percent: percentage / 100.0,
                   lineWidth: 5.0,
                   circularStrokeCap: CircularStrokeCap.round,
                   backgroundColor: Colors.black26,
@@ -79,7 +84,7 @@ class ProvinceInfoWidget extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
-                    this.info.name,
+                    this.provinceInfo.name,
                     style: TextStyle(
                       fontSize: 15.0,
                       color: Colors.white,
@@ -87,8 +92,8 @@ class ProvinceInfoWidget extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    'Infections: ${this.info.numInfections}\n'
-                    'Deaths: ${this.info.numDeaths}',
+                    'Infections: ${this.provinceInfo.numInfections}\n'
+                    'Deaths: ${this.provinceInfo.numDeaths}',
                     style: TextStyle(
                       fontSize: 13.0,
                       color: Colors.white70,

@@ -24,12 +24,14 @@ import 'package:flutter/services.dart';
 import 'package:percent_indicator/percent_indicator.dart';
 import 'dart:math';
 
+import '../models/country_info.dart';
 import '../helpers/styles.dart';
 import '../models/province_info.dart';
 import '../widgets/province_info.dart';
 import '../widgets/top_container.dart';
 import '../widgets/app_menu.dart';
 import './province_page.dart';
+import '../apis/corona_api.dart';
 
 
 /// The CountryPage.
@@ -42,14 +44,34 @@ class CountryPage extends StatefulWidget {
 
 class _CountryPage extends State<CountryPage> {
 
+  final countryZa = 'ZA';
+  final _coronaApi = CoronaApi();
+  Future<CountryInfo> _countryStatsFuture;
+  Future<List<ProvinceInfo>> _provinceStatsFuture;
+  
+
   @override
 	initState() {
 		super.initState();
+    this._getCoutryStats();
+    this._getProvinceStats();
 		SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
 			statusBarColor: Styles.kColourAppPrimary,
 			systemNavigationBarColor: Styles.kColourAppPrimary,
 		));
 	}
+
+  void _getCoutryStats() {
+    setState(() {
+      _countryStatsFuture = this._coronaApi.getCountryStats(isoCode: this.countryZa);
+    });
+  }
+
+  void _getProvinceStats() {
+    setState(() {
+      _provinceStatsFuture = this._coronaApi.getAllCountryProvinceStats(isoCode: this.countryZa);
+    });
+  }
 
   Widget _subheading(String title) {
     return Text(
@@ -89,7 +111,7 @@ class _CountryPage extends State<CountryPage> {
     );
   }
 
-  Widget _countrySummary(BuildContext context) {
+  Widget _countrySummary(BuildContext context, CountryInfo stats) {
     return TopContainerWidget(
      // backgroundImage: 'assets/images/zar-flag-md.png',
       child: Column(
@@ -134,9 +156,9 @@ class _CountryPage extends State<CountryPage> {
                         ),
                       ),
                     ),
-                    this._countryStats('Infections', 12344),
-                    this._countryStats('Deaths', 123),
-                    this._countryStats('Recoveries', 5000),
+                    this._countryStats('Infections', stats.numInfections),
+                    this._countryStats('Deaths', stats.numDeaths),
+                    this._countryStats('Recoveries', stats.numRecovered),
                   ],
                 )
               ],
@@ -147,143 +169,53 @@ class _CountryPage extends State<CountryPage> {
     );
   }
 
-  Widget _province(ProvinceInfo info, BuildContext context) {
+  Widget _province(CountryInfo countryInfo, ProvinceInfo provinceInfo, BuildContext context) {
     return ProvinceInfoWidget(
-      numTotal: 10000000,
-      info: info,
-      onTap: () => this._gotoProvince(info, context),
+      countryInfo: countryInfo,
+      provinceInfo: provinceInfo,
+      onTap: () => this._gotoProvince(provinceInfo, context),
     );
   }
 
-  Widget _provinces(BuildContext context) {
-    final random = Random();
-    final int totalInfections = random.nextInt(1234) + random.nextInt(1234567);
-    final provinces = <ProvinceInfo>[
-      ProvinceInfo(
-        name: 'Gauteng',
-        numInfections: random.nextInt(totalInfections),
-        numDeaths: random.nextInt(totalInfections),
-        numRecovered: random.nextInt(totalInfections),
-        numTests: random.nextInt(totalInfections),
-        colour: Styles.kColourGauteng,
-        imageUrlMd: 'assets/images/gp-bg.jpg'
-      ),
-
-      ProvinceInfo(
-        name: 'Eastern Cape',
-        numInfections: random.nextInt(totalInfections),
-        numDeaths: random.nextInt(totalInfections),
-        numRecovered: random.nextInt(totalInfections),
-        numTests: random.nextInt(totalInfections),
-        colour: Styles.kColourEasternCape,
-        imageUrlMd: 'assets/images/ec-bg.jpg',
-      ),
-
-      ProvinceInfo(
-        name: 'Western Cape',
-        numInfections: random.nextInt(totalInfections),
-        numDeaths: random.nextInt(totalInfections),
-        numRecovered: random.nextInt(totalInfections),
-        numTests: random.nextInt(totalInfections),
-        colour: Styles.kColourWesternCape,
-        imageUrlMd: 'assets/images/wc-bg.jpg',
-      ),
-
-      ProvinceInfo(
-        name: 'Northern Cape',
-        numInfections: random.nextInt(totalInfections),
-        numDeaths: random.nextInt(totalInfections),
-        numRecovered: random.nextInt(totalInfections),
-        numTests: random.nextInt(totalInfections),
-        colour: Styles.kColourNorthenCape,
-        imageUrlMd: 'assets/images/nc-bg.jpg',
-      ),
-
-      ProvinceInfo(
-        name: 'North West',
-        numInfections: random.nextInt(totalInfections),
-        numDeaths: random.nextInt(totalInfections),
-        numRecovered: random.nextInt(totalInfections),
-        numTests: random.nextInt(totalInfections),
-        colour: Styles.kColourNorthWest,
-        imageUrlMd: 'assets/images/nw-bg.jpg',
-      ),
-
-      ProvinceInfo(
-        name: 'Limpopo',
-        numInfections: random.nextInt(totalInfections),
-        numDeaths: random.nextInt(totalInfections),
-        numRecovered: random.nextInt(totalInfections),
-        numTests: random.nextInt(totalInfections),
-        colour: Styles.kColourLimpopo,
-        imageUrlMd: 'assets/images/lp-bg.jpg',
-      ),
-
-      ProvinceInfo(
-        name: 'Mpumalanga',
-        numInfections: random.nextInt(totalInfections),
-        numDeaths: random.nextInt(totalInfections),
-        numRecovered: random.nextInt(totalInfections),
-        numTests: random.nextInt(totalInfections),
-        colour: Styles.kColourMpumalanga,
-        imageUrlMd: 'assets/images/mp-bg.jpg',
-      ),
-
-      ProvinceInfo(
-        name: 'KwaZulu Natal',
-        numInfections: random.nextInt(totalInfections),
-        numDeaths: random.nextInt(totalInfections),
-        numRecovered: random.nextInt(totalInfections),
-        numTests: random.nextInt(totalInfections),
-        colour: Styles.kColourKZN,
-        imageUrlMd: 'assets/images/kzn-bg.jpg'
-      ),
-
-      ProvinceInfo(
-        name: 'Free State',
-        numInfections: random.nextInt(totalInfections),
-        numDeaths: random.nextInt(totalInfections),
-        numRecovered: random.nextInt(totalInfections),
-        numTests: random.nextInt(totalInfections),
-        colour: Styles.kColourFreeState,
-        imageUrlMd: 'assets/images/fs-bg.jpg'
-      ),
-    ];
+  Widget _provinces(BuildContext context, CountryInfo countryInfo, List<ProvinceInfo> provinces) {
     int provinceIndex = 0;
+
+    // sort in descending order according to Number Of Infections.
+    provinces.sort((ProvinceInfo a, ProvinceInfo b) => b.numInfections.compareTo(a.numInfections));
 
     return Column(
       children: <Widget>[
         Row(
           children: <Widget>[
-            this._province(provinces[provinceIndex++], context),
+            this._province(countryInfo, provinces[provinceIndex++], context),
           ],
         ),
         Row(
           children: <Widget>[
-            this._province(provinces[provinceIndex++], context),
+            this._province(countryInfo, provinces[provinceIndex++], context),
             SizedBox(width: 20.0),
-            this._province(provinces[provinceIndex++], context),
+            this._province(countryInfo, provinces[provinceIndex++], context),
           ],
         ),
         Row(
           children: <Widget>[
-            this._province(provinces[provinceIndex++], context),
+            this._province(countryInfo, provinces[provinceIndex++], context),
             SizedBox(width: 20.0),
-            this._province(provinces[provinceIndex++], context),
+            this._province(countryInfo, provinces[provinceIndex++], context),
           ],
         ),
         Row(
           children: <Widget>[
-            this._province(provinces[provinceIndex++], context),
+            this._province(countryInfo, provinces[provinceIndex++], context),
             SizedBox(width: 20.0),
-            this._province(provinces[provinceIndex++], context),
+            this._province(countryInfo, provinces[provinceIndex++], context),
           ],
         ),
         Row(
           children: <Widget>[
-            this._province(provinces[provinceIndex++], context),
+            this._province(countryInfo, provinces[provinceIndex++], context),
             SizedBox(width: 20.0),
-            this._province(provinces[provinceIndex++], context),
+            this._province(countryInfo, provinces[provinceIndex++], context),
           ],
         ),
       ],
@@ -296,34 +228,60 @@ class _CountryPage extends State<CountryPage> {
      // backgroundColor: LightColors.kLightYellow,
       floatingActionButton: AppMenuWidget(),
       body: SafeArea(
-        child: Column(
-          children: <Widget>[
-            this._countrySummary(context),
-            Expanded(
-              child: SingleChildScrollView(
-                child: Column(
-                  children: <Widget>[
-                    Container(
-                      color: Colors.transparent,
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 20.0,
-                        vertical: 10.0
-                      ),
+        child: FutureBuilder(
+          future: Future.wait([
+            this._countryStatsFuture,
+            this._provinceStatsFuture,
+          ]),
+          builder: (BuildContext context, AsyncSnapshot snapshot) {
+            if (snapshot.hasData) {
+              CountryInfo countryInfo = snapshot.data[0];
+              List<ProvinceInfo> provincesInfo = snapshot.data[1];
+
+              return Column(
+                children: <Widget>[
+                  this._countrySummary(context, countryInfo),
+                  Expanded(
+                    child: SingleChildScrollView(
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          _subheading('Provinces'),
-                          SizedBox(height: 5.0),
-                          this._provinces(context),
+                          Container(
+                            color: Colors.transparent,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 20.0,
+                              vertical: 10.0
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                _subheading('Provinces'),
+                                SizedBox(height: 5.0),
+                                this._provinces(context, countryInfo, provincesInfo),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
+                  ),
+                ],
+              );
+            }
+
+            else if (snapshot.hasError) {
+              return Text(snapshot.error.toString(), style: TextStyle(color: Colors.black),);
+            }
+
+            return Container(
+              color: Styles.kColourAppPrimary.withOpacity(0.667),
+              child: Center(
+                child: CircularProgressIndicator(
+                  backgroundColor: Styles.kColourAppTextPrimary,
+                )
+              )
+            );
+          }
+        )
       ),
     );
   }

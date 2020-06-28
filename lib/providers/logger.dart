@@ -19,17 +19,27 @@
 // 
 
 
-import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:package_info/package_info.dart';
 import 'package:f_logs/f_logs.dart';
-import 'dart:convert';
 import 'package:logger/logger.dart';
+
 
 
 /// LoggerProvider.
 abstract class LoggerProvider {
-  static final log = Logger(
+
+  /// Logging to the Device.
+  static const int LEVEL_DEVICE = 0x00000001;
+
+  // Logging to the Console.
+  static const int LEVEL_CONSOLE = 0x00000010;
+  
+
+  /// Whether logging to the device is enabled or not.
+  static int _logLevel = LEVEL_CONSOLE | LEVEL_DEVICE;
+
+
+  static final _log = Logger(
     printer: PrettyPrinter(
       methodCount: 3,       // number of method calls to be displayed
       errorMethodCount: 8, // number of method calls if stacktrace is provided
@@ -40,6 +50,18 @@ abstract class LoggerProvider {
     ),
   );
 
+
+
+  ///
+  /// Sets or gets whether logging to the device is enabled or not.
+  /// 
+  static int isDeviceLogging([int logLevel]) {
+    if (logLevel != null) {
+      logLevel = _logLevel;
+    }
+    return _logLevel;
+  }
+
   /// Logs information.
   static void info({
     @required String message,
@@ -49,7 +71,9 @@ abstract class LoggerProvider {
     StackTrace stackTrace,
   })
   {
-    log.i(message, exception, stackTrace);
+    if (_isLevelBitTurnedOn(LEVEL_CONSOLE)) {
+      _log.i(message, exception, stackTrace);
+    }
   }
 
   /// Logs an error.
@@ -58,11 +82,24 @@ abstract class LoggerProvider {
     /*@required*/ String className,
     /*@required*/ String methodName,
     Exception exception,
-    StackTrace stackTrace,
+    StackTrace stacktrace,
   })
   {
-    log.e(message, exception, stackTrace);
+    if (_isLevelBitTurnedOn(LEVEL_CONSOLE)) {
+      _log.e(message, exception, stacktrace);
+    }
+    if (_isLevelBitTurnedOn(LEVEL_DEVICE)) {
+      FLog.error(
+        text: message,
+        stacktrace: stacktrace,
+        exception: exception,
+        methodName: message,
+        className: className,
+      );
+    }
   }
 
+  /// Whether bit is turned on or not.
+  static bool _isLevelBitTurnedOn(int bit) => _logLevel & bit != 0;
 
 }

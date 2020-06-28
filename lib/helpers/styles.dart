@@ -21,6 +21,9 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 
+import '../models/province_info.dart';
+
+
 ///
 /// Styles.
 /// 
@@ -38,4 +41,37 @@ abstract class Styles {
 	static const Color kColourAppPrimary = Colors.deepPurple;
 	static const Color kColourAppSecondary = Colors.deepOrange;
 	static const Color kColourAppTextPrimary = const Color(0xffffffdd);
+
+  /// Gets the [province] image.
+  static String provinceImage(ProvinceInfo province) {
+    final String code = province.isoCode.toLowerCase().split('-').elementAt(1);
+    return 'assets/images/$code-bg.jpg';
+  }
+
+  /// Gets the [province] colour.
+  static Color provinceColour(ProvinceInfo province) {
+    final String code = province.isoCode.toLowerCase();
+    switch (code) {
+      case 'za-gp':
+        return Styles.kColourGauteng;
+      case 'za-ec':
+        return Styles.kColourEasternCape;
+      case 'za-wc':
+        return Styles.kColourWesternCape;
+      case 'za-nc':
+        return Styles.kColourNorthenCape;
+      case 'za-nw':
+        return Styles.kColourNorthWest;
+      case 'za-kzn':
+        return Styles.kColourKZN;
+      case 'za-mp':
+        return Styles.kColourMpumalanga;
+      case 'za-lp':
+        return Styles.kColourLimpopo;
+      case 'za-fs':
+        return Styles.kColourFreeState;
+      default:
+        throw 'Unknown Province Colour: ' + code;
+    }
+  }
 }

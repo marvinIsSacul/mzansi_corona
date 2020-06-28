@@ -20,12 +20,14 @@
 
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:package_info/package_info.dart';
-import 'package:f_logs/f_logs.dart';
 import 'dart:convert';
 
+import '../providers/logger.dart';
 
-/// Contains similar methods.
+
+/// For performing HTTP requests.
 class AbstractApi {
 
   /// The default HTTP client.
@@ -33,42 +35,46 @@ class AbstractApi {
 
   /// Initializes the object.
   AbstractApi() {
-    this._addInterceptors();
+    this.addInterceptors();
   }
 
-  void _addInterceptors() {
-    http.interceptors.add(InterceptorsWrapper(
-      onRequest: (RequestOptions options) {
-        FLog.debug(
-          text: jsonEncode(options),
-          className: this.runtimeType.toString(),
+  @protected
+  void addInterceptors() {
+    http.interceptors.add(InterceptorsWrapper (
+      onRequest: (RequestOptions options) async {
+        LoggerProvider.info(
+          message: 'Sending HTTP request...\n'
+            + 'URL: ${options.uri.toString()}\n'
+            + "Headers: ${options.headers.toString()}\n"
+            + 'Params: ' + options.queryParameters.toString(),
         );
         return options;
       },
-      onResponse: (Response response) {
-        FLog.debug(
-          text: jsonEncode(response),
-          className: this.runtimeType.toString(),
+      onResponse: (Response response) async {
+        LoggerProvider.info(
+          message: 'HTTP reponse Headers:\n' + response.headers.toString() + '\n'
+            + 'HTTP response:\n' + (response.data.toString()) + '\n'
         );
         return response;
       },
-      onError: (DioError error) {
-        FLog.error(
-          text: 'Request Error.',
-          className: this.runtimeType.toString(),
-         // methodName: 'basicGet',
-          exception: error
-        );
+      onError: (DioError error) async {
+        // LoggerProvider.error(
+        //   message: 'Request Error.',
+        //   exception: error
+        // );
         return error;
       }
     ));
   }
 
-  Future _getOptions() async {
+  /// Gets the HTTP options.
+  @protected
+  Future<Options> getOptions() async {
     final PackageInfo info = await PackageInfo.fromPlatform();
     final Options options = Options(
       receiveTimeout: 1000 * 30,
       sendTimeout: 1000 * 20,
+      validateStatus: (int status) => status < 500,
       headers: {
         'User-Agent': '${info.appName}; ${info.version}'
       }
@@ -83,16 +89,75 @@ class AbstractApi {
   
   /// Does a basic GET request to endpoint specified by [url]
   /// With query params specified by [params].
-  Future basicGet(String url, [Map<String, dynamic> params]) async {
+  Future<Response> basicGet(String url, [Map<String, dynamic> params]) async {
     try {
-      final Response response = await http.get(url, queryParameters: params, options: await this._getOptions());
-      return Future.value(response.data);
+      final Response response = await http.get(url, queryParameters: params, options: await this.getOptions());
+      return Future.value(response);
     }
-    catch (e, s) {
-      FLog.error(
-        text: 'Request Error.',
+    on DioError catch(e, s) {
+      LoggerProvider.error(
+        message: 'Request Error.',
         className: this.runtimeType.toString(),
         methodName: 'basicGet',
+        stacktrace: s,
+        exception: e,
+      );
+      return Future.error(e, s);
+    }
+    on FlutterError catch(e, s) {
+      LoggerProvider.error(
+        message: 'Request Error.',
+        className: this.runtimeType.toString(),
+        methodName: 'basicGet',
+        stacktrace: s,
+        //exception: e,
+      );
+      return Future.error(e, s);
+    }
+    catch (e, s) {
+      LoggerProvider.error(
+        message: 'Request Error.',
+        className: this.runtimeType.toString(),
+        methodName: 'basicGet',
+        stacktrace: s,
+        exception: e,
+      );
+      return Future.error(e, s);
+    }
+  }
+
+  /// Does a basic POST request to endpoint specified by [url]
+  /// With query params specified by [data].
+  Future<Response> basicPost(String url, [Map<String, dynamic> data]) async {
+    try {
+      final Response response = await http.post(url, data: data, options: await this.getOptions());
+      return Future.value(response.data);
+    }
+    on DioError catch(e, s) {
+      LoggerProvider.error(
+        message: 'Request Error.',
+        className: this.runtimeType.toString(),
+        methodName: 'basicPost',
+        stacktrace: s,
+        exception: e,
+      );
+      return Future.error(e, s);
+    }
+    on FlutterError catch(e, s) {
+      LoggerProvider.error(
+        message: 'Request Error.',
+        className: this.runtimeType.toString(),
+        methodName: 'basicPost',
+        stacktrace: s,
+        //exception: e,
+      );
+      return Future.error(e, s);
+    }
+    catch (e, s) {
+      LoggerProvider.error(
+        message: 'Request Error.',
+        className: this.runtimeType.toString(),
+        methodName: 'basicPost',
         stacktrace: s,
         exception: e,
       );

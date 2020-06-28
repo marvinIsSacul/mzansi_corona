@@ -1,5 +1,4 @@
 
-import 'package:MzansiCorona/widgets/back_button.dart';
 ///
 /// Marvin Kagiso
 /// 18:10 2020/06/06
@@ -23,11 +22,14 @@ import 'package:MzansiCorona/widgets/back_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:percent_indicator/circular_percent_indicator.dart';
+import 'package:bubble_tab_indicator/bubble_tab_indicator.dart';
+import 'package:fl_chart/fl_chart.dart';
 
 import '../helpers/styles.dart';
 import '../widgets/app_menu.dart';
 import '../models/province_info.dart';
 import '../widgets/top_container.dart';
+import '../widgets/back_button.dart';
 
 
 /// Province Page.
@@ -42,32 +44,43 @@ class ProvincePage extends StatefulWidget {
 	_ProvincePageState createState() => _ProvincePageState();
 }
 
-class _ProvincePageState extends State<ProvincePage> {
+class _ProvincePageState extends State<ProvincePage> with TickerProviderStateMixin {
+
+  TabController _tabCtrl;
+  int _selectedTabIndex = 0;
 	
 	@override
 	initState() {
+    _tabCtrl = TabController(
+      vsync: this,
+      length: 3,
+      initialIndex: 0,
+    );
+
 		super.initState();
-		SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-			statusBarColor: widget.provinceInfo.colour,
-			systemNavigationBarColor: widget.provinceInfo.colour,
-		));
+		// SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+		// 	statusBarColor: widget.provinceInfo.colour,
+		// 	systemNavigationBarColor: widget.provinceInfo.colour,
+		// ));
 	}
 
 	@override
 	dispose() {
-		SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-			statusBarColor: Styles.kColourAppPrimary,
-			systemNavigationBarColor: Styles.kColourAppPrimary,
-		));
+		// SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+		// 	statusBarColor: Styles.kColourAppPrimary,
+		// 	systemNavigationBarColor: Styles.kColourAppPrimary,
+		// ));
 		super.dispose();
 	}
 
 	Widget _provinceHeader(BuildContext context) {
 		final perc = (widget.provinceInfo.numInfections / 12234323) * 100;
+    final String provinceBgImage = Styles.provinceImage(widget.provinceInfo);
+    final Color provinceColour = Styles.provinceColour(widget.provinceInfo);
 
 		return TopContainerWidget(
-			backgroundImage: widget.provinceInfo.imageUrlMd,
-			backgroundColour: widget.provinceInfo.colour,
+			backgroundImage: provinceBgImage,
+			backgroundColour: provinceColour,
 			child: Container(
 					decoration: BoxDecoration(
 						color: Colors.black26,
@@ -121,7 +134,7 @@ class _ProvincePageState extends State<ProvincePage> {
 					]
 				)
 			),
-    	);
+    );
 	}
 
 	@override
@@ -139,15 +152,38 @@ class _ProvincePageState extends State<ProvincePage> {
 							Container(
 							color: Colors.transparent,
 							padding: EdgeInsets.symmetric(
-								horizontal: 20.0,
+								horizontal: 8.0,
 								vertical: 10.0
 							),
 							child: Column(
 								crossAxisAlignment: CrossAxisAlignment.start,
 								children: <Widget>[
-								//_subheading('Provinces'),
-							//	SizedBox(height: 5.0),
-							//	this._provinces(context),
+                  TabBar(
+                    controller: this._tabCtrl,
+                    indicatorSize: TabBarIndicatorSize.tab,
+                    indicator: BubbleTabIndicator(
+                      indicatorHeight: 25.0,
+                      indicatorColor: Styles.kColourAppPrimary,
+                      tabBarIndicatorSize: TabBarIndicatorSize.tab,
+                    ),
+                    labelColor: Styles.kColourAppTextPrimary,
+                    isScrollable: false,
+                    unselectedLabelColor: Styles.kColourAppSecondary,
+                    onTap: (int value) {
+                      setState(() {
+                        this._selectedTabIndex = value;
+                      });
+                    },
+                    tabs: <Widget>[
+                      Text('Stats'),
+                      Text('Line'),
+                      Text('Pie'),
+                    ],
+                  ),
+                  Container(
+                    margin: EdgeInsets.only(top: 30.0),
+                    child: this._renderBasedOnTabIndex(context)
+                  )
 								],
 							),
 							),
@@ -160,4 +196,58 @@ class _ProvincePageState extends State<ProvincePage> {
 			),
 		);
 	}
+
+  Widget _renderBasedOnTabIndex(BuildContext context) {
+    switch (this._selectedTabIndex) {
+      case 0: return this._renderStats();
+      case 1: return this._renderLineGraph(context);
+      case 2: return this._renderPieChart();
+      default: throw 'Unknown Tab Index: ' + this._selectedTabIndex.toString();
+    }
+  }
+
+  Widget _renderStats() {
+    return Text('stats', style: TextStyle(color: Colors.black),);
+  }
+
+  Widget _renderLineGraph(BuildContext context) {
+    final LineChartBarData lineChartBarData1 = LineChartBarData(
+      spots: [
+        FlSpot(1, 1),
+        FlSpot(3, 1.5),
+        FlSpot(5, 1.4),
+        FlSpot(7, 3.4),
+        FlSpot(10, 2),
+        FlSpot(12, 2.2),
+        FlSpot(13, 1.8),
+      ],
+      isCurved: true,
+      colors: [
+        const Color(0xff4af699),
+      ],
+      barWidth: 4,
+      isStrokeCapRound: true,
+      dotData: FlDotData(
+        show: false,
+      ),
+      belowBarData: BarAreaData(
+        show: false,
+      ),
+    );
+
+    return Container(
+      width: MediaQuery.of(context).size.width * 0.85,
+      child: LineChart(
+        LineChartData(
+          lineBarsData: [
+            lineChartBarData1
+          ]
+        )
+      ),
+    );
+  }
+
+  Widget _renderPieChart() {
+    return Text('pie chart', style: TextStyle(color: Colors.black));
+  }
 }

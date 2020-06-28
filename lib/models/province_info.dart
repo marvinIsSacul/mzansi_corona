@@ -20,28 +20,41 @@
 
 
 import 'dart:ui';
+import 'package:json_annotation/json_annotation.dart';
 
+part 'province_info.g.dart';
 
 /// The Province's Corona Info.
+@JsonSerializable(explicitToJson: true)
 class ProvinceInfo {
+  @JsonKey(name: 'name', nullable: false, required: true)
   String name;
-  int numInfections;
-  int numDeaths;
-  int numRecovered;
-  int numTests;
 
-  Color colour;
-  String imageUrlSm;
-  String imageUrlMd;
+  @JsonKey(name: 'iso_code', nullable: false, required: true)
+  String isoCode;
+
+  @JsonKey(name: 'infections', nullable: true)
+  int numInfections;
+
+  @JsonKey(name: 'deaths', nullable: true)
+  int numDeaths;
+
+  @JsonKey(name: 'recoveries', nullable: true)
+  int numRecovered;
+
+  @JsonKey(name: 'tests', nullable: true)
+  int numTests;
 
   ProvinceInfo({
     this.name,
+    this.isoCode,
     this.numDeaths,
     this.numInfections,
     this.numRecovered,
     this.numTests,
-    this.imageUrlSm,
-    this.imageUrlMd,
-    this.colour,
   });
+
+  factory ProvinceInfo.fromJson(Map<String, dynamic> json) => _$ProvinceInfoFromJson(json);
+
+  Map<String, dynamic> toJson() => _$ProvinceInfoToJson(this);
 }
