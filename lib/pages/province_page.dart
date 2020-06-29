@@ -1,4 +1,6 @@
 
+import 'package:MzansiCorona/models/country_info.dart';
+import 'package:MzansiCorona/providers/logger.dart';
 ///
 /// Marvin Kagiso
 /// 18:10 2020/06/06
@@ -30,14 +32,18 @@ import '../widgets/app_menu.dart';
 import '../models/province_info.dart';
 import '../widgets/top_container.dart';
 import '../widgets/back_button.dart';
+import '../apis/corona_api.dart';
+import '../models/province_timeline.dart';
 
 
 /// Province Page.
 class ProvincePage extends StatefulWidget {
 	final ProvinceInfo provinceInfo;
+  final CountryInfo countryInfo;
 
-	ProvincePage(this.provinceInfo) {
+	ProvincePage(this.provinceInfo, this.countryInfo) {
 		assert(this.provinceInfo != null);
+		assert(this.countryInfo != null);
 	}
 
 	@override
@@ -48,6 +54,10 @@ class _ProvincePageState extends State<ProvincePage> with TickerProviderStateMix
 
   TabController _tabCtrl;
   int _selectedTabIndex = 0;
+  int _piechartTouchedIndex;
+  final _coronaApi = CoronaApi();
+  Future<List<ProvinceTimeline>> _provinceTimelineFuture;
+
 	
 	@override
 	initState() {
@@ -56,6 +66,9 @@ class _ProvincePageState extends State<ProvincePage> with TickerProviderStateMix
       length: 3,
       initialIndex: 0,
     );
+
+    //this._provinceTimelineFuture = this._coronaApi.getProvinceTimelineMonths(isoCode: this.widget.provinceInfo.isoCode);
+    this._loadProvinceInfo();
 
 		super.initState();
 		// SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
@@ -74,7 +87,7 @@ class _ProvincePageState extends State<ProvincePage> with TickerProviderStateMix
 	}
 
 	Widget _provinceHeader(BuildContext context) {
-		final perc = (widget.provinceInfo.numInfections / 12234323) * 100;
+		final perc = (widget.provinceInfo.numInfections / widget.countryInfo.numInfections) * 100;
     final String provinceBgImage = Styles.provinceImage(widget.provinceInfo);
     final Color provinceColour = Styles.provinceColour(widget.provinceInfo);
 
@@ -82,13 +95,13 @@ class _ProvincePageState extends State<ProvincePage> with TickerProviderStateMix
 			backgroundImage: provinceBgImage,
 			backgroundColour: provinceColour,
 			child: Container(
-					decoration: BoxDecoration(
-						color: Colors.black26,
-						borderRadius: BorderRadius.all(
-							Radius.circular(40.0),
-						) 
-					),
-					child: Column(
+        decoration: BoxDecoration(
+          color: Colors.black26,
+          borderRadius: BorderRadius.all(
+            Radius.circular(40.0),
+          ) 
+        ),
+				child: Column(
 					mainAxisAlignment: MainAxisAlignment.spaceEvenly,
 					children: <Widget>[
 						Row(
@@ -180,9 +193,30 @@ class _ProvincePageState extends State<ProvincePage> with TickerProviderStateMix
                       Text('Pie'),
                     ],
                   ),
-                  Container(
-                    margin: EdgeInsets.only(top: 30.0),
-                    child: this._renderBasedOnTabIndex(context)
+                  FutureBuilder<List<ProvinceTimeline>>(
+                    initialData: [],
+                    future: this._provinceTimelineFuture,
+                    builder: (BuildContext context, AsyncSnapshot<List<ProvinceTimeline>> snapshot) {
+                      if (snapshot.hasData) {
+                        return Container(
+                          margin: EdgeInsets.only(top: 30.0),
+                          child: this._renderBasedOnTabIndex(context, snapshot.data)
+                        );
+                      }
+                      else if (snapshot.error) {
+                        return Text(snapshot.error);
+                      }
+                      else {
+                        return Container(
+                          color: Styles.kColourAppPrimary.withOpacity(0.667),
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              backgroundColor: Styles.kColourAppTextPrimary,
+                            )
+                          )
+                        ); 
+                      }
+                    }
                   )
 								],
 							),
@@ -197,35 +231,27 @@ class _ProvincePageState extends State<ProvincePage> with TickerProviderStateMix
 		);
 	}
 
-  Widget _renderBasedOnTabIndex(BuildContext context) {
+  Widget _renderBasedOnTabIndex(BuildContext context, List<ProvinceTimeline> data) {
     switch (this._selectedTabIndex) {
-      case 0: return this._renderStats();
-      case 1: return this._renderLineGraph(context);
-      case 2: return this._renderPieChart();
+      case 0: return this._renderStats(context, data);
+      case 1: return this._renderLineGraph(context, data);
+      case 2: return this._renderPieChart(context, data);
       default: throw 'Unknown Tab Index: ' + this._selectedTabIndex.toString();
     }
   }
 
-  Widget _renderStats() {
+  Widget _renderStats(BuildContext context, List<ProvinceTimeline> data) {
     return Text('stats', style: TextStyle(color: Colors.black),);
   }
 
-  Widget _renderLineGraph(BuildContext context) {
-    final LineChartBarData lineChartBarData1 = LineChartBarData(
-      spots: [
-        FlSpot(1, 1),
-        FlSpot(3, 1.5),
-        FlSpot(5, 1.4),
-        FlSpot(7, 3.4),
-        FlSpot(10, 2),
-        FlSpot(12, 2.2),
-        FlSpot(13, 1.8),
-      ],
+  LineChartBarData _createLineChart(List<FlSpot> data, Color colour) {
+    final LineChartBarData lineChart = LineChartBarData(
+      spots: data,
       isCurved: true,
       colors: [
-        const Color(0xff4af699),
+        colour,
       ],
-      barWidth: 4,
+      barWidth: 3,
       isStrokeCapRound: true,
       dotData: FlDotData(
         show: false,
@@ -235,19 +261,214 @@ class _ProvincePageState extends State<ProvincePage> with TickerProviderStateMix
       ),
     );
 
+    return lineChart;
+  }
+
+  Widget _renderLineGraph(BuildContext context, List<ProvinceTimeline> data) {
+    final infections = data.map<FlSpot>((ProvinceTimeline p) {
+      return FlSpot(p.updateAt.month.toDouble(), p.numInfections.toDouble());
+    }).toList();
+    final deaths = data.map<FlSpot>((ProvinceTimeline p) {
+      return FlSpot(p.updateAt.month.toDouble(), p.numDeaths.toDouble());
+    }).toList();
+    final tests = data.map<FlSpot>((ProvinceTimeline p) {
+      return FlSpot(p.updateAt.month.toDouble(), p.numTests.toDouble());
+    }).toList();
+    final recoveries = data.map<FlSpot>((ProvinceTimeline p) {
+      return FlSpot(p.updateAt.month.toDouble(), p.numRecovered.toDouble());
+    }).toList();
+
+    final infectionsLineChart = this._createLineChart(infections, Styles.kColourInfections);
+    final deathsLineChart = this._createLineChart(deaths, Styles.kColourDeaths);
+    final testsLineChart = this._createLineChart(tests, Styles.kColourTests);
+    final recoveriesLineChart = this._createLineChart(recoveries, Styles.kColourRecoveries);
+
     return Container(
-      width: MediaQuery.of(context).size.width * 0.85,
+      width: MediaQuery.of(context).size.width * 0.90,
       child: LineChart(
         LineChartData(
           lineBarsData: [
-            lineChartBarData1
-          ]
+            infectionsLineChart,
+            deathsLineChart,
+            testsLineChart,
+            recoveriesLineChart
+          ],
+          titlesData: FlTitlesData(
+            bottomTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 22,
+              textStyle: const TextStyle(
+                color: Styles.kColourAppPrimary,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+              margin: 10,
+              getTitles: (double value) {
+                return value.toInt().toString();
+              },
+            ),
+            leftTitles: SideTitles(
+              showTitles: true,
+              textStyle: const TextStyle(
+                color: Styles.kColourAppPrimary,
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+              getTitles: (double value) {
+                return '${value.toInt()}';
+              },
+              margin: 8,
+              reservedSize: 30,
+            ),
+          ),
         )
       ),
     );
   }
 
-  Widget _renderPieChart() {
-    return Text('pie chart', style: TextStyle(color: Colors.black));
+  Widget _renderPieChart(BuildContext context, List<ProvinceTimeline> data) {
+    final province = this.widget.provinceInfo;
+    final total = ((province.numRecovered ?? 0) + (province.numDeaths ?? 0) + (province.numInfections ?? 0) + (province.numTests ?? 0)).toDouble();
+    final List<PieChartSectionData> sections = [
+      //if ((province.numInfections ?? 0) > 0)
+        _pieChartSections((province.numInfections ?? 0) / total, Styles.kColourInfections),
+      //if ((province.numTests ?? 0) > 0)
+        _pieChartSections((province.numTests ?? 0) / total, Styles.kColourTests),
+     // if ((province.numDeaths ?? 0) > 0)
+        _pieChartSections((province.numDeaths ?? 0) / total, Styles.kColourDeaths),
+     // if ((province.numRecovered ?? 0) > 0)
+        _pieChartSections((province.numRecovered ?? 0) / total, Styles.kColourRecoveries),
+    ];
+
+    return Column(
+      children: [
+        PieChart(
+          PieChartData(
+            pieTouchData: PieTouchData(touchCallback: (PieTouchResponse pieTouchResponse) {
+              setState(() {
+                if (pieTouchResponse.touchInput is FlLongPressEnd || pieTouchResponse.touchInput is FlPanEnd) {
+                  this._piechartTouchedIndex = -1;
+                } else {
+                  this._piechartTouchedIndex = pieTouchResponse.touchedSectionIndex;
+                }
+              });
+            }),
+            borderData: FlBorderData(
+              show: false,
+            ),
+            sectionsSpace: 0,
+            centerSpaceRadius: 40,
+            sections: sections,
+          ),
+        ),
+
+        Column(
+          mainAxisSize: MainAxisSize.max,
+          mainAxisAlignment: MainAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const <Widget>[
+            Indicator(
+              color: Styles.kColourInfections,
+              text: 'Infections',
+              isSquare: true,
+            ),
+            SizedBox(
+              height: 4,
+            ),
+            Indicator(
+              color: Styles.kColourTests,
+              text: 'Tests',
+              isSquare: true,
+            ),
+            SizedBox(
+              height: 4,
+            ),
+            Indicator(
+              color: Styles.kColourRecoveries,
+              text: 'Recoveries',
+              isSquare: true,
+            ),
+            SizedBox(
+              height: 4,
+            ),
+            Indicator(
+              color: Styles.kColourDeaths,
+              text: 'Deaths',
+              isSquare: true,
+            ),
+            SizedBox(
+              height: 18,
+            ),
+          ],
+        ),
+        const SizedBox(
+          width: 28,
+        ),
+      ]
+    );
+  }
+
+  PieChartSectionData _pieChartSections(double value, Color colour) {
+    final isTouched = 1 == this._piechartTouchedIndex;
+    final double fontSize = isTouched ? 25 : 16;
+    final double radius = isTouched ? 60 : 50;
+
+    return PieChartSectionData(
+      color: colour,
+      value: value.toDouble(),
+      title: value == 0 ? '' : '${value.toStringAsFixed(1)}%',
+      radius: radius,
+      titleStyle: TextStyle(
+        fontSize: fontSize,
+        fontWeight: FontWeight.bold,
+        color: Styles.kColourAppTextPrimary
+      ),
+    );
+  }
+
+  void _loadProvinceInfo() {
+    this.setState(() {
+      this._provinceTimelineFuture = this._coronaApi.getProvinceTimelineMonths(isoCode: this.widget.provinceInfo.isoCode);
+    });
+  }
+}
+
+class Indicator extends StatelessWidget {
+  final Color color;
+  final String text;
+  final bool isSquare;
+  final double size;
+  final Color textColor;
+
+  const Indicator({
+    Key key,
+    this.color,
+    this.text,
+    this.isSquare,
+    this.size = 16,
+    this.textColor = const Color(0xff505050),
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: isSquare ? BoxShape.rectangle : BoxShape.circle,
+            color: color,
+          ),
+        ),
+        const SizedBox(
+          width: 4,
+        ),
+        Text(
+          text,
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor),
+        )
+      ],
+    );
   }
 }

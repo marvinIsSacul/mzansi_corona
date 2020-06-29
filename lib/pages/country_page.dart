@@ -173,7 +173,7 @@ class _CountryPage extends State<CountryPage> {
     return ProvinceInfoWidget(
       countryInfo: countryInfo,
       provinceInfo: provinceInfo,
-      onTap: () => this._gotoProvince(provinceInfo, context),
+      onTap: () => this._gotoProvince(provinceInfo, countryInfo, context),
     );
   }
 
@@ -235,8 +235,8 @@ class _CountryPage extends State<CountryPage> {
           ]),
           builder: (BuildContext context, AsyncSnapshot snapshot) {
             if (snapshot.hasData) {
-              CountryInfo countryInfo = snapshot.data[0];
-              List<ProvinceInfo> provincesInfo = snapshot.data[1];
+              final CountryInfo countryInfo = snapshot.data[0];
+              final List<ProvinceInfo> provincesInfo = snapshot.data[1];
 
               return Column(
                 children: <Widget>[
@@ -286,9 +286,9 @@ class _CountryPage extends State<CountryPage> {
     );
   }
 
-  void _gotoProvince(ProvinceInfo info, BuildContext context) {
+  void _gotoProvince(ProvinceInfo provinceInfo, CountryInfo countryInfo, BuildContext context) {
     Navigator.of(context).push(MaterialPageRoute(builder: (context) {
-      return ProvincePage(info);
+      return ProvincePage(provinceInfo, countryInfo);
     }));
   }
 }

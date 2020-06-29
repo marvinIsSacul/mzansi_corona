@@ -21,13 +21,13 @@
 
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'dart:convert';
 
 import '../apis/abstract_app_api.dart';
 import '../providers/logger.dart';
 import '../.env.dart';
 import '../models/country_info.dart';
 import '../models/province_info.dart';
+import '../models/province_timeline.dart';
 
 
 /// For performing HTTP to the App Server requests.
@@ -44,7 +44,6 @@ class CoronaApi extends AbstractAppApi {
         final CountryInfo countryInfo = CountryInfo.fromJson(result.data);
         return countryInfo;
       }
-
 
       throw result.statusMessage;
     }
@@ -93,6 +92,34 @@ class CoronaApi extends AbstractAppApi {
         }
 
         return provincesList;
+      }
+
+      throw result.statusMessage;
+    }
+    catch (e, s) {
+      // Already logged.
+
+      return Future.error(e, s);
+    }
+  }
+
+  /// Gets the Stats of a Province specified by [isoCode].
+  Future<List<ProvinceTimeline>> getProvinceTimelineMonths({@required String isoCode}) async {
+    try {
+      final url = Env.APP_BASE_URL + 'provinces/' + isoCode + '/timeline/months';
+      final result = await this.basicGet(url);
+      List<ProvinceTimeline> provinceData = List();
+
+      if (result.statusCode == HttpStatus.ok) {
+        final List<dynamic> provincesDataRaw = result.data;
+
+        for (int i = 0; i < provincesDataRaw.length; ++i) {
+          final Map<String, dynamic> e = provincesDataRaw[i];
+          final p = ProvinceTimeline.fromJson(e);
+          provinceData.add(p);
+        }
+
+        return provinceData;
       }
 
       throw result.statusMessage;

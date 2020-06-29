@@ -42,6 +42,11 @@ abstract class Styles {
 	static const Color kColourAppSecondary = Colors.deepOrange;
 	static const Color kColourAppTextPrimary = const Color(0xffffffdd);
 
+  static const Color kColourInfections = Colors.amberAccent;
+  static const Color kColourTests = Colors.lightBlueAccent;
+  static const Color kColourDeaths = Colors.redAccent;
+  static const Color kColourRecoveries = Colors.greenAccent;
+
   /// Gets the [province] image.
   static String provinceImage(ProvinceInfo province) {
     final String code = province.isoCode.toLowerCase().split('-').elementAt(1);
