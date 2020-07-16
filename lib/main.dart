@@ -1,4 +1,4 @@
-import 'package:MzansiCorona/providers/logger.dart';
+
 ///
 /// Marvin Kagiso
 /// 18:10 2020/06/06
@@ -27,7 +27,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import './pages/country_page.dart';
 import './helpers/styles.dart';
 import './providers/session.dart';
-
+import 'package:MzansiCorona/providers/logger.dart';
 
 void main() {
   SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
@@ -60,7 +60,7 @@ class MyApp extends StatelessWidget {
           displayColor: Styles.kColourAppTextPrimary,
           fontFamily: 'Poppins',
         ),
-        platform: TargetPlatform.android,
+        platform: TargetPlatform.iOS,
         accentColor: Styles.kColourAppPrimary,
         accentColorBrightness: Brightness.light,
       ),

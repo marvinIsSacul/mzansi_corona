@@ -1,6 +1,4 @@
 
-import 'package:MzansiCorona/models/country_info.dart';
-import 'package:MzansiCorona/providers/logger.dart';
 ///
 /// Marvin Kagiso
 /// 18:10 2020/06/06
@@ -23,17 +21,24 @@ import 'package:MzansiCorona/providers/logger.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'package:percent_indicator/circular_percent_indicator.dart';
 import 'package:bubble_tab_indicator/bubble_tab_indicator.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:popup_menu/popup_menu.dart';
+import 'dart:math';
 
+
+import '../models/country_info.dart';
+import '../providers/logger.dart';
 import '../helpers/styles.dart';
 import '../widgets/app_menu.dart';
 import '../models/province_info.dart';
 import '../widgets/top_container.dart';
 import '../widgets/back_button.dart';
-import '../apis/corona_api.dart';
 import '../models/province_timeline.dart';
+import '../widgets/indicator.dart';
+import '../apis/corona_api.dart';
 
 
 /// Province Page.
@@ -52,39 +57,71 @@ class ProvincePage extends StatefulWidget {
 
 class _ProvincePageState extends State<ProvincePage> with TickerProviderStateMixin {
 
+  final GlobalKey _popupBtnMenuKey = GlobalKey();
   TabController _tabCtrl;
-  int _selectedTabIndex = 0;
+  ViewTab _selectedTabIndex = ViewTab.pieChart;
   int _piechartTouchedIndex;
+  ProvinceTimeline _selectedMonthTimeline;
+  List<ProvinceTimeline> _provincesMonthTimeline;
+  List<ProvinceTimeline> _provinceMonthDaysTimeline;
+  int _selectedMonth = -1;
+  PageState _state = PageState.loading;
   final _coronaApi = CoronaApi();
-  Future<List<ProvinceTimeline>> _provinceTimelineFuture;
+  dynamic _error;
+  Function _lastLoad;
 
 	
 	@override
 	initState() {
     _tabCtrl = TabController(
       vsync: this,
-      length: 3,
-      initialIndex: 0,
+      length: ViewTab.values.length,
+      initialIndex: this._selectedTabIndex.index,
     );
 
-    //this._provinceTimelineFuture = this._coronaApi.getProvinceTimelineMonths(isoCode: this.widget.provinceInfo.isoCode);
+		super.initState();
+
     this._loadProvinceInfo();
 
-		super.initState();
-		// SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-		// 	statusBarColor: widget.provinceInfo.colour,
-		// 	systemNavigationBarColor: widget.provinceInfo.colour,
-		// ));
+  //  this._initPopupMenu();
 	}
 
 	@override
 	dispose() {
-		// SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-		// 	statusBarColor: Styles.kColourAppPrimary,
-		// 	systemNavigationBarColor: Styles.kColourAppPrimary,
-		// ));
 		super.dispose();
 	}
+
+  void _showMenu() {
+    final months = this._provincesMonthTimeline.map<int>((ProvinceTimeline d) {
+      return d.updateAt.month;
+    }).toSet().map<MenuItemProvider>((int monthIndex) {
+      return MenuItem(
+        title: this._getMonthString(monthIndex),
+        userInfo: monthIndex,
+      );
+    }).toList().reversed.toList();
+
+    final menu = PopupMenu(
+      maxColumn: 1,
+      backgroundColor: Styles.kColourAppPrimary,
+      lineColor: Styles.kColourAppTextPrimary,
+      items: months,
+      onClickMenu: (MenuItemProvider item) {
+        final int selectedMonthIndex = (item as MenuItem).userInfo;
+        setState(() {
+          final value = this._provincesMonthTimeline.firstWhere((ProvinceTimeline p) => p.updateAt.month == selectedMonthIndex);
+          this._selectedMonthTimeline = value;
+          if (this._selectedTabIndex == ViewTab.lineGraph) {
+            this._loadProvinceMonthlyData();
+          }
+        });
+      },
+      stateChanged: (bool) {},
+      onDismiss: () {},
+    );
+
+    menu.show(widgetKey: this._popupBtnMenuKey);
+  }
 
 	Widget _provinceHeader(BuildContext context) {
 		final perc = (widget.provinceInfo.numInfections / widget.countryInfo.numInfections) * 100;
@@ -150,98 +187,217 @@ class _ProvincePageState extends State<ProvincePage> with TickerProviderStateMix
     );
 	}
 
-	@override
-	Widget build(BuildContext context) {
-		return Scaffold(
-			//floatingActionButton: AppMenuWidget(),
-			body: SafeArea(
-				child: Column(
-				children: <Widget>[
-					this._provinceHeader(context),
-					Expanded(
-					child: SingleChildScrollView(
-						child: Column(
-						children: <Widget>[
-							Container(
-							color: Colors.transparent,
-							padding: EdgeInsets.symmetric(
-								horizontal: 8.0,
-								vertical: 10.0
-							),
-							child: Column(
-								crossAxisAlignment: CrossAxisAlignment.start,
-								children: <Widget>[
-                  TabBar(
-                    controller: this._tabCtrl,
-                    indicatorSize: TabBarIndicatorSize.tab,
-                    indicator: BubbleTabIndicator(
-                      indicatorHeight: 25.0,
-                      indicatorColor: Styles.kColourAppPrimary,
-                      tabBarIndicatorSize: TabBarIndicatorSize.tab,
-                    ),
-                    labelColor: Styles.kColourAppTextPrimary,
-                    isScrollable: false,
-                    unselectedLabelColor: Styles.kColourAppSecondary,
-                    onTap: (int value) {
-                      setState(() {
-                        this._selectedTabIndex = value;
-                      });
-                    },
-                    tabs: <Widget>[
-                      Text('Stats'),
-                      Text('Line'),
-                      Text('Pie'),
+  Widget _renderBody() {
+    switch (this._state) {
+
+      case PageState.success:
+
+        return Column(
+          children: <Widget>[
+
+            SingleChildScrollView(
+              child: Column(
+                children: <Widget>[
+                  Container(
+                  color: Colors.transparent,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 8.0,
+                    vertical: 10.0
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      TabBar(
+                        controller: this._tabCtrl,
+                        indicatorSize: TabBarIndicatorSize.tab,
+                        indicator: BubbleTabIndicator(
+                          indicatorHeight: 25.0,
+                          indicatorColor: Styles.kColourAppPrimary,
+                          tabBarIndicatorSize: TabBarIndicatorSize.tab,
+                        ),
+                        labelColor: Styles.kColourAppTextPrimary,
+                        isScrollable: false,
+                        unselectedLabelColor: Styles.kColourAppSecondary,
+                        onTap: (int index) {
+                          setState(() {
+                            this._selectedTabIndex = ViewTab.values[index];
+                            if (this._selectedTabIndex == ViewTab.lineGraph) {
+                              this._loadProvinceMonthlyData();
+                            }
+                          });
+                        },
+                        tabs: <Widget>[
+                          Icon(
+                            Icons.pie_chart
+                          ),
+                          Icon(
+                            Icons.linear_scale
+                          ),
+                          Icon(
+                            Icons.text_format
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 32,),
+
+                      this._renderBasedOnTabIndex(context),
                     ],
                   ),
-                  FutureBuilder<List<ProvinceTimeline>>(
-                    initialData: [],
-                    future: this._provinceTimelineFuture,
-                    builder: (BuildContext context, AsyncSnapshot<List<ProvinceTimeline>> snapshot) {
-                      if (snapshot.hasData) {
-                        return Container(
-                          margin: EdgeInsets.only(top: 30.0),
-                          child: this._renderBasedOnTabIndex(context, snapshot.data)
-                        );
-                      }
-                      else if (snapshot.error) {
-                        return Text(snapshot.error);
-                      }
-                      else {
-                        return Container(
-                          color: Styles.kColourAppPrimary.withOpacity(0.667),
-                          child: Center(
-                            child: CircularProgressIndicator(
-                              backgroundColor: Styles.kColourAppTextPrimary,
-                            )
-                          )
-                        ); 
-                      }
-                    }
-                  )
-								],
-							),
-							),
-						],
-						),
-					),
-					),
-				],
-				),
+                  ),
+                ],
+                ),
+              ),
+          ],
+        );
+    
+      case PageState.error:
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                Text(
+                  this._error.toString(),
+                  style: TextStyle(
+                    fontSize: 22,
+                    color: Colors.grey,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                SizedBox(height: 32),
+                MaterialButton(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8.0)
+                  ),
+                  color: Styles.kColourAppPrimary,
+                  child: Icon(
+                    Icons.refresh,
+                    color: Styles.kColourAppTextPrimary,
+                  ),
+                  onPressed: (){
+                    this._lastLoad();
+                  },
+                )
+              ],
+            ),
+          )
+        );
+
+      case PageState.loading: default:
+        return Center(
+          child: Column(
+            children: <Widget>[
+              SizedBox(height: 32),
+              CircularProgressIndicator(
+                backgroundColor: Styles.kColourAppTextPrimary,
+              )
+            ],
+          )
+        );
+    }
+  }
+
+	@override
+	Widget build(BuildContext context) {
+    final bool hasData = this._provincesMonthTimeline != null && this._provincesMonthTimeline.length > 0;
+
+    PopupMenu.context = context;
+
+		return Scaffold(
+			floatingActionButton: AnimatedOpacity(
+        duration: const Duration(milliseconds: 500),
+        child: hasData ? this._renderPopupMenu() : null,
+        opacity: hasData ? 1.0 : 0.0,
+      ),
+			body: SafeArea(
+				child: Column(
+          children: [
+            this._provinceHeader(context),
+            this._renderBody(),
+          ]
+        )
 			),
 		);
 	}
 
-  Widget _renderBasedOnTabIndex(BuildContext context, List<ProvinceTimeline> data) {
+  Widget _renderPopupMenu() {
+    return Container(
+      child: FloatingActionButton.extended(
+        tooltip: 'More Months',
+        // shape: RoundedRectangleBorder(
+        //   borderRadius: BorderRadius.circular(8.0)
+        // ),
+        key: this._popupBtnMenuKey,
+        onPressed: () => _showMenu(),
+        // color: Styles.kColourAppPrimary,
+        icon: Icon(
+          Icons.calendar_today,
+          color: Styles.kColourAppTextPrimary,
+        ),
+        label: Text(this._getMonthString(this._selectedMonthTimeline.updateAt.month))
+      ),
+    );
+  }
+
+  Widget _renderBasedOnTabIndex(BuildContext context) {
+    final data = this._provincesMonthTimeline;
+
     switch (this._selectedTabIndex) {
-      case 0: return this._renderStats(context, data);
-      case 1: return this._renderLineGraph(context, data);
-      case 2: return this._renderPieChart(context, data);
-      default: throw 'Unknown Tab Index: ' + this._selectedTabIndex.toString();
+      case ViewTab.textInfo: return this._renderStats(context);
+      case ViewTab.lineGraph: return this._renderLineGraph(context);
+      case ViewTab.pieChart: return this._renderPieChart(context);
+
+      default: throw 'Unknown Tab Index: ' + this._selectedTabIndex.index.toString();
     }
   }
 
-  Widget _renderStats(BuildContext context, List<ProvinceTimeline> data) {
-    return Text('stats', style: TextStyle(color: Colors.black),);
+  Widget _renderStats(BuildContext context) {
+    final data = this._provincesMonthTimeline;
+    final month = this._selectedMonthTimeline;
+    final stats = <Map<String, dynamic>>[
+      {
+        'title': 'Infections',
+        'value': month?.numInfections?.toString() ?? '-',
+        'icon': Icons.bug_report,
+      },
+      {
+        'title': 'Tests',
+        'value': month?.numTests?.toString() ?? '-',
+        'icon': Icons.local_hospital,
+      },
+      {
+        'title': 'Recoveries',
+        'value': month?.numInfections?.toString() ?? '-',
+        'icon': Icons.accessibility_new,
+      },
+      {
+        'title': 'Deaths',
+        'value': month?.numDeaths?.toString() ?? '-',
+        'icon': Icons.highlight_off,
+      },
+    ];
+
+    return Container(
+      child: Column(
+        children: <Widget>[
+          ...stats.map<Widget>((Map<String, dynamic> stat) {
+            return Card(
+              color: Styles.kColourAppSecondary,
+              child: ListTile(
+                title: Text(stat['title']),
+                subtitle: Text(stat['value']),
+                leading: Icon(
+                  stat['icon'],
+                  color: Styles.kColourAppTextPrimary,
+                  size: 32.0,
+                ),
+              ),
+            );
+          })
+        ],
+      )
+    );
   }
 
   LineChartBarData _createLineChart(List<FlSpot> data, Color colour) {
@@ -257,25 +413,35 @@ class _ProvincePageState extends State<ProvincePage> with TickerProviderStateMix
         show: false,
       ),
       belowBarData: BarAreaData(
-        show: false,
+        show: true,
       ),
     );
 
     return lineChart;
   }
 
-  Widget _renderLineGraph(BuildContext context, List<ProvinceTimeline> data) {
+  Widget _renderLineGraph(BuildContext context) {
+    final data = this._provinceMonthDaysTimeline;
+    double maxY = 0;
+  
     final infections = data.map<FlSpot>((ProvinceTimeline p) {
-      return FlSpot(p.updateAt.month.toDouble(), p.numInfections.toDouble());
+      maxY = max(maxY, p.numInfections?.toDouble() ?? 0);
+      return FlSpot(p.updateAt.month.toDouble(), p.numInfections?.toDouble() ?? 0);
     }).toList();
+
     final deaths = data.map<FlSpot>((ProvinceTimeline p) {
-      return FlSpot(p.updateAt.month.toDouble(), p.numDeaths.toDouble());
+      maxY = max(maxY, p.numDeaths?.toDouble() ?? 0);
+      return FlSpot(p.updateAt.month.toDouble(), p.numDeaths?.toDouble() ?? 0);
     }).toList();
+
     final tests = data.map<FlSpot>((ProvinceTimeline p) {
-      return FlSpot(p.updateAt.month.toDouble(), p.numTests.toDouble());
+      maxY = max(maxY, p.numTests?.toDouble() ?? 0);
+      return FlSpot(p.updateAt.month.toDouble(), p.numTests?.toDouble() ?? 0);
     }).toList();
+
     final recoveries = data.map<FlSpot>((ProvinceTimeline p) {
-      return FlSpot(p.updateAt.month.toDouble(), p.numRecovered.toDouble());
+      maxY = max(maxY, p.numRecovered?.toDouble() ?? 0);
+      return FlSpot(p.updateAt.month.toDouble(), p.numRecovered?.toDouble() ?? 0);
     }).toList();
 
     final infectionsLineChart = this._createLineChart(infections, Styles.kColourInfections);
@@ -284,60 +450,120 @@ class _ProvincePageState extends State<ProvincePage> with TickerProviderStateMix
     final recoveriesLineChart = this._createLineChart(recoveries, Styles.kColourRecoveries);
 
     return Container(
+      margin: EdgeInsets.only(top: 8.0,),
       width: MediaQuery.of(context).size.width * 0.90,
-      child: LineChart(
-        LineChartData(
-          lineBarsData: [
-            infectionsLineChart,
-            deathsLineChart,
-            testsLineChart,
-            recoveriesLineChart
-          ],
-          titlesData: FlTitlesData(
-            bottomTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 22,
-              textStyle: const TextStyle(
-                color: Styles.kColourAppPrimary,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
+      child: Column(
+       // mainAxisAlignment: MainAxisAlignment.spaceAround,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          LineChart(
+            LineChartData(
+              //minY: 0,
+              lineBarsData: [
+                infectionsLineChart,
+                deathsLineChart,
+                testsLineChart,
+                recoveriesLineChart
+              ],
+              titlesData: FlTitlesData(
+                bottomTitles: SideTitles(
+                // interval: 100,
+                  // checkToShowTitle: (minValue, maxValue, sideTitles, appliedInterval, value) {
+                    
+                  // },
+                  showTitles: true,
+               //   reservedSize: 1,
+                  textStyle: const TextStyle(
+                    color: Styles.kColourAppPrimary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                  margin: 10,
+                  getTitles: (double value) {
+                    return value.toInt().toString();
+                    return this._getMonthString(value.toInt());
+                  },
+                ),
+                leftTitles: SideTitles(
+                  interval: 50,
+                  showTitles: true,
+                  textStyle: const TextStyle(
+                    color: Styles.kColourAppPrimary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 10,
+                  ),
+                  getTitles: (double value) {
+                    //if (isInList(infections, value) /*|| isInList(recoveries, value) || isInList(tests, value) || isInList(deaths, value)*/) {
+                      //return value.toInt().toString();
+                    //}
+
+                    return value.toInt().toString();
+                  },
+                  margin: 8,
+                //  reservedSize: null,
+                ),
               ),
-              margin: 10,
-              getTitles: (double value) {
-                return value.toInt().toString();
-              },
-            ),
-            leftTitles: SideTitles(
-              showTitles: true,
-              textStyle: const TextStyle(
-                color: Styles.kColourAppPrimary,
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-              ),
-              getTitles: (double value) {
-                return '${value.toInt()}';
-              },
-              margin: 8,
-              reservedSize: 30,
-            ),
+            )
           ),
-        )
+          const SizedBox(height: 32),
+          this._renderIndicators(),
+        ]
       ),
     );
   }
 
-  Widget _renderPieChart(BuildContext context, List<ProvinceTimeline> data) {
-    final province = this.widget.provinceInfo;
+  Widget _renderIndicators({bool isSquare = false, double size = 16}) {
+    return Column(
+      mainAxisSize: MainAxisSize.max,
+      mainAxisAlignment: MainAxisAlignment.end,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        IndicatorWidget(
+          color: Styles.kColourInfections,
+          text: 'Infections',
+          isSquare: isSquare,
+          size: size,
+        ),
+        SizedBox(
+          height: 4,
+        ),
+        IndicatorWidget(
+          color: Styles.kColourTests,
+          text: 'Tests',
+          isSquare: isSquare,
+          size: size,
+        ),
+        SizedBox(
+          height: 4,
+        ),
+        IndicatorWidget(
+          color: Styles.kColourRecoveries,
+          text: 'Recoveries',
+          isSquare: isSquare,
+          size: size,
+        ),
+        SizedBox(
+          height: 4,
+        ),
+        IndicatorWidget(
+          color: Styles.kColourDeaths,
+          text: 'Deaths',
+          isSquare: isSquare,
+          size: size,
+        ),
+      ],
+    );
+  }
+
+  Widget _renderPieChart(BuildContext context) {
+    final data = this._provincesMonthTimeline;
+    final province = this._selectedMonthTimeline;
     final total = ((province.numRecovered ?? 0) + (province.numDeaths ?? 0) + (province.numInfections ?? 0) + (province.numTests ?? 0)).toDouble();
     final List<PieChartSectionData> sections = [
-      //if ((province.numInfections ?? 0) > 0)
-        _pieChartSections((province.numInfections ?? 0) / total, Styles.kColourInfections),
-      //if ((province.numTests ?? 0) > 0)
-        _pieChartSections((province.numTests ?? 0) / total, Styles.kColourTests),
-     // if ((province.numDeaths ?? 0) > 0)
-        _pieChartSections((province.numDeaths ?? 0) / total, Styles.kColourDeaths),
-     // if ((province.numRecovered ?? 0) > 0)
-        _pieChartSections((province.numRecovered ?? 0) / total, Styles.kColourRecoveries),
+      _pieChartSections((province.numInfections ?? 0) / total * 100.0, Styles.kColourInfections, Index.infections),
+      _pieChartSections((province.numTests ?? 0) / total * 100.0, Styles.kColourTests, Index.tests),
+      _pieChartSections((province.numDeaths ?? 0) / total * 100.0, Styles.kColourDeaths, Index.recoveries),
+      _pieChartSections((province.numRecovered ?? 0) / total * 100.0, Styles.kColourRecoveries, Index.deaths),
     ];
 
     return Column(
@@ -361,55 +587,13 @@ class _ProvincePageState extends State<ProvincePage> with TickerProviderStateMix
             sections: sections,
           ),
         ),
-
-        Column(
-          mainAxisSize: MainAxisSize.max,
-          mainAxisAlignment: MainAxisAlignment.end,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: const <Widget>[
-            Indicator(
-              color: Styles.kColourInfections,
-              text: 'Infections',
-              isSquare: true,
-            ),
-            SizedBox(
-              height: 4,
-            ),
-            Indicator(
-              color: Styles.kColourTests,
-              text: 'Tests',
-              isSquare: true,
-            ),
-            SizedBox(
-              height: 4,
-            ),
-            Indicator(
-              color: Styles.kColourRecoveries,
-              text: 'Recoveries',
-              isSquare: true,
-            ),
-            SizedBox(
-              height: 4,
-            ),
-            Indicator(
-              color: Styles.kColourDeaths,
-              text: 'Deaths',
-              isSquare: true,
-            ),
-            SizedBox(
-              height: 18,
-            ),
-          ],
-        ),
-        const SizedBox(
-          width: 28,
-        ),
+        this._renderIndicators(),
       ]
     );
   }
 
-  PieChartSectionData _pieChartSections(double value, Color colour) {
-    final isTouched = 1 == this._piechartTouchedIndex;
+  PieChartSectionData _pieChartSections(double value, Color colour, Index index) {
+    final isTouched = index.index == this._piechartTouchedIndex;
     final double fontSize = isTouched ? 25 : 16;
     final double radius = isTouched ? 60 : 50;
 
@@ -427,48 +611,92 @@ class _ProvincePageState extends State<ProvincePage> with TickerProviderStateMix
   }
 
   void _loadProvinceInfo() {
-    this.setState(() {
-      this._provinceTimelineFuture = this._coronaApi.getProvinceTimelineMonths(isoCode: this.widget.provinceInfo.isoCode);
+    setState(() {
+      this._state = PageState.loading;
+      this._lastLoad = this._loadProvinceInfo;
     });
+    
+    this._coronaApi.getProvinceTimelineMonths(isoCode: this.widget.provinceInfo.isoCode)
+      .then((List<ProvinceTimeline> data) {
+        this.setState(() {
+          this._provincesMonthTimeline = data;
+          this._selectedMonthTimeline = this._provincesMonthTimeline.last;  // gets the last element (latest).
+          this._state = PageState.success;
+        });
+      })
+      .catchError((error) {
+        setState(() {
+          this._state = PageState.error;
+          this._error = error;
+        });
+      });
+  }
+
+  void _loadProvinceMonthlyData() {
+    setState(() {
+      this._state = PageState.loading;
+      this._lastLoad = this._loadProvinceMonthlyData;
+    });
+
+    this._coronaApi.getProvinceTimelineMonthDays(
+      isoCode: this.widget.provinceInfo.isoCode,
+      year: this._selectedMonthTimeline.updateAt.year,
+      month: this._selectedMonthTimeline.updateAt.month
+    )
+      .then((List<ProvinceTimeline> data) {
+        this.setState(() {
+          this._provinceMonthDaysTimeline = data;
+          this._state = PageState.success;
+          
+        });
+       // print(data.map((e) => e.toJson().toString()).toString());
+      })
+      .catchError((error) {
+        setState(() {
+          this._state = PageState.error;
+          this._error = error;
+        });
+      });
+  }
+
+  String _getMonthString(int monthInt) {
+    switch (monthInt) {
+      case DateTime.january: return 'January';
+      case DateTime.february: return 'February';
+      case DateTime.march: return 'March';
+      case DateTime.april: return 'April';
+      case DateTime.may: return 'May';
+      case DateTime.june: return 'June';
+      case DateTime.july: return 'July';
+      case DateTime.august: return 'August';
+      case DateTime.september: return 'September';
+      case DateTime.october: return 'October';
+      case DateTime.november: return 'November';
+      case DateTime.december: return 'December';
+      default: return '';
+    }
+  }
+
+  _scaleBetween({@required double unscaledNum, double minAllowed = 0, @required double maxAllowed, double min = 0, @required double max}) {
+    return (maxAllowed - minAllowed) * (unscaledNum - min) / (max - min) + minAllowed;
   }
 }
 
-class Indicator extends StatelessWidget {
-  final Color color;
-  final String text;
-  final bool isSquare;
-  final double size;
-  final Color textColor;
+enum Index {
+  infections,
+  tests,
+  recoveries,
+  deaths,
+}
 
-  const Indicator({
-    Key key,
-    this.color,
-    this.text,
-    this.isSquare,
-    this.size = 16,
-    this.textColor = const Color(0xff505050),
-  }) : super(key: key);
+enum ViewTab {
+  pieChart,
+  lineGraph,
+  textInfo,
+}
 
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: <Widget>[
-        Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            shape: isSquare ? BoxShape.rectangle : BoxShape.circle,
-            color: color,
-          ),
-        ),
-        const SizedBox(
-          width: 4,
-        ),
-        Text(
-          text,
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor),
-        )
-      ],
-    );
-  }
+enum PageState {
+  loading,
+  success,
+  error,
 }

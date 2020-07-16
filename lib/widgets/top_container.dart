@@ -51,8 +51,8 @@ class TopContainerWidget extends StatelessWidget {
 
         color: this.backgroundColour ?? Styles.kColourAppPrimary,
         borderRadius: BorderRadius.only(
-          bottomRight: Radius.circular(40.0),
-          bottomLeft: Radius.circular(40.0),
+          bottomRight: Radius.circular(20.0),
+          bottomLeft: Radius.circular(20.0),
         )
       ),
       height: this.height ?? 164,

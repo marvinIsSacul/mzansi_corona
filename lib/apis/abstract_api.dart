@@ -72,7 +72,7 @@ class AbstractApi {
   Future<Options> getOptions() async {
     final PackageInfo info = await PackageInfo.fromPlatform();
     final Options options = Options(
-      receiveTimeout: 1000 * 30,
+      receiveTimeout: 1000 * 20,
       sendTimeout: 1000 * 20,
       validateStatus: (int status) => status < 500,
       headers: {

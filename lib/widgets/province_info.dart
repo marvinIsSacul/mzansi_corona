@@ -50,12 +50,12 @@ class ProvinceInfoWidget extends StatelessWidget {
       child: InkWell(
         onTap: onTap ?? null,
         child: Container(
-          margin: EdgeInsets.symmetric(vertical: 10.0),
-          padding: EdgeInsets.all(15.0),
+          margin: EdgeInsets.symmetric(vertical: 8.0),
+          padding: EdgeInsets.all(8.0),
           height: 200,
           decoration: BoxDecoration(
             color: provinceColour,
-            borderRadius: BorderRadius.circular(40.0),
+            borderRadius: BorderRadius.circular(20.0),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -85,8 +85,8 @@ class ProvinceInfoWidget extends StatelessWidget {
                 children: <Widget>[
                   Text(
                     this.provinceInfo.name,
-                    style: TextStyle(
-                      fontSize: 15.0,
+                    style: const TextStyle(
+                      fontSize: 14.0,
                       color: Colors.white,
                       fontWeight: FontWeight.w700,
                     ),
@@ -94,7 +94,7 @@ class ProvinceInfoWidget extends StatelessWidget {
                   Text(
                     'Infections: ${this.provinceInfo.numInfections}\n'
                     'Deaths: ${this.provinceInfo.numDeaths}',
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 13.0,
                       color: Colors.white70,
                       fontWeight: FontWeight.w600,

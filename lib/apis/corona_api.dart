@@ -130,4 +130,31 @@ class CoronaApi extends AbstractAppApi {
       return Future.error(e, s);
     }
   }
+
+  /// Gets the Day Stats of a Province specified by [isoCode], [year] and [month] specifiy which days data will be pulled.
+  Future<List<ProvinceTimeline>> getProvinceTimelineMonthDays({@required String isoCode, @required int year, @required int month}) async {
+    try {
+      final url = Env.APP_BASE_URL + 'provinces/$isoCode/timeline/days/$year/$month';
+      final result = await this.basicGet(url);
+      List<ProvinceTimeline> provinceMonthDaysData = List();
+
+      if (result.statusCode == HttpStatus.ok) {
+        final List<dynamic> provincesDataRaw = result.data;
+
+        for (int i = 0; i < provincesDataRaw.length; ++i) {
+          final Map<String, dynamic> e = provincesDataRaw[i];
+          provinceMonthDaysData.add(ProvinceTimeline.fromJson(e));
+        }
+
+        return provinceMonthDaysData;
+      }
+
+      throw result.statusMessage;
+    }
+    catch (e, s) {
+      // Already logged.
+
+      return Future.error(e, s);
+    }
+  }
 }

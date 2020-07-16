@@ -32,7 +32,12 @@ dependencies:
   hive: ^1.4.1+1
   hive_flutter: ^0.3.0+1
   fl_chart: ^0.10.0
-  bubble_tab_indicator: "^0.1.4"
+  bubble_tab_indicator: ^0.1.4
+  grouped_list: ^3.2.2
+  popup_menu: ^1.0.5
+  auto_size_text: ^2.1.0
+  tuple: ^1.0.3
+  rxdart: ^0.24.1
 
 
   # The following adds the Cupertino Icons font to your application.

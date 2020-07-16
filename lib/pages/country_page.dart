@@ -226,7 +226,7 @@ class _CountryPage extends State<CountryPage> {
   Widget build(BuildContext context) {
     return Scaffold(
      // backgroundColor: LightColors.kLightYellow,
-      floatingActionButton: AppMenuWidget(),
+      //floatingActionButton: AppMenuWidget(),
       body: SafeArea(
         child: FutureBuilder(
           future: Future.wait([
@@ -273,7 +273,7 @@ class _CountryPage extends State<CountryPage> {
             }
 
             return Container(
-              color: Styles.kColourAppPrimary.withOpacity(0.667),
+             // color: Styles.kColourAppPrimary.withOpacity(0.667),
               child: Center(
                 child: CircularProgressIndicator(
                   backgroundColor: Styles.kColourAppTextPrimary,
