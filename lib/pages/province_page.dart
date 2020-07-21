@@ -1,4 +1,6 @@
 
+import 'dart:async';
+
 ///
 /// Marvin Kagiso
 /// 18:10 2020/06/06
@@ -65,10 +67,13 @@ class _ProvincePageState extends State<ProvincePage> with TickerProviderStateMix
   List<ProvinceTimeline> _provincesMonthTimeline;
   List<ProvinceTimeline> _provinceMonthDaysTimeline;
   int _selectedMonth = -1;
-  PageState _state = PageState.loading;
+  PageState _pageState = PageState.loading;
   final _coronaApi = CoronaApi();
   dynamic _error;
   Function _lastLoad;
+  Timer _timerLoadData;
+  BuildContext _currentContext;
+  int _numLoadSuccess = 0;
 
 	
 	@override
@@ -80,16 +85,41 @@ class _ProvincePageState extends State<ProvincePage> with TickerProviderStateMix
     );
 
 		super.initState();
-
     this._loadProvinceInfo();
-
-  //  this._initPopupMenu();
+    this._setupTimer_loadData();
 	}
 
 	@override
 	dispose() {
 		super.dispose();
+    this._closeTimer_loadData();
 	}
+
+  void _setupTimer_loadData() {
+    _timerLoadData ??= Timer.periodic(Duration(seconds: 30), (Timer timer) {
+      Scaffold.of(_currentContext).showSnackBar(SnackBar(
+        content: Text('Refreshing...'),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8.0)
+        ),
+        duration: Duration(seconds: 5),
+        action: SnackBarAction(
+          label: 'OK',
+          onPressed: () {
+            Scaffold.of(_currentContext).hideCurrentSnackBar();
+          },
+        ),
+      ));
+      this._lastLoad();
+    });
+  }
+
+  void _closeTimer_loadData() {
+    if (_timerLoadData != null && _timerLoadData.isActive) {
+      _timerLoadData.cancel();
+      _timerLoadData = null;
+    }
+  }
 
   void _showMenu() {
     final months = this._provincesMonthTimeline.map<int>((ProvinceTimeline d) {
@@ -105,15 +135,28 @@ class _ProvincePageState extends State<ProvincePage> with TickerProviderStateMix
       maxColumn: 1,
       backgroundColor: Styles.kColourAppPrimary,
       lineColor: Styles.kColourAppTextPrimary,
-      items: months,
+      items: [
+        // if (this._selectedTabIndex == ViewTab.lineGraph)
+        //   MenuItem(
+        //   title: '<All Months>',
+        //   userInfo: -1,
+        // ),
+        ...months
+      ],
       onClickMenu: (MenuItemProvider item) {
         final int selectedMonthIndex = (item as MenuItem).userInfo;
         setState(() {
-          final value = this._provincesMonthTimeline.firstWhere((ProvinceTimeline p) => p.updateAt.month == selectedMonthIndex);
-          this._selectedMonthTimeline = value;
-          if (this._selectedTabIndex == ViewTab.lineGraph) {
-            this._loadProvinceMonthlyData();
+          if (selectedMonthIndex == -1) {
+
           }
+          else {
+            final value = this._provincesMonthTimeline.firstWhere((ProvinceTimeline p) => p.updateAt.month == selectedMonthIndex);
+            this._selectedMonthTimeline = value;
+          }
+
+          // if (this._selectedTabIndex == ViewTab.lineGraph) {
+          //   this._loadProvinceMonthlyData();
+          // }
         });
       },
       stateChanged: (bool) {},
@@ -188,7 +231,7 @@ class _ProvincePageState extends State<ProvincePage> with TickerProviderStateMix
 	}
 
   Widget _renderBody() {
-    switch (this._state) {
+    switch (this._pageState) {
 
       case PageState.success:
 
@@ -221,18 +264,18 @@ class _ProvincePageState extends State<ProvincePage> with TickerProviderStateMix
                         onTap: (int index) {
                           setState(() {
                             this._selectedTabIndex = ViewTab.values[index];
-                            if (this._selectedTabIndex == ViewTab.lineGraph) {
-                              this._loadProvinceMonthlyData();
-                            }
+                            // if (this._selectedTabIndex == ViewTab.lineGraph) {
+                            //   this._loadProvinceMonthlyData();
+                            // }
                           });
                         },
                         tabs: <Widget>[
                           Icon(
                             Icons.pie_chart
                           ),
-                          Icon(
-                            Icons.linear_scale
-                          ),
+                          // Icon(
+                          //   Icons.linear_scale
+                          // ),
                           Icon(
                             Icons.text_format
                           ),
@@ -310,13 +353,18 @@ class _ProvincePageState extends State<ProvincePage> with TickerProviderStateMix
         child: hasData ? this._renderPopupMenu() : null,
         opacity: hasData ? 1.0 : 0.0,
       ),
-			body: SafeArea(
-				child: Column(
-          children: [
-            this._provinceHeader(context),
-            this._renderBody(),
-          ]
-        )
+			body: Builder(
+			  builder: (BuildContext context) {
+          this._currentContext = context;
+			    return SafeArea(
+			    	child: Column(
+              children: [
+                this._provinceHeader(context),
+                this._renderBody(),
+              ]
+            )
+			    );
+			  }
 			),
 		);
 	}
@@ -345,7 +393,7 @@ class _ProvincePageState extends State<ProvincePage> with TickerProviderStateMix
 
     switch (this._selectedTabIndex) {
       case ViewTab.textInfo: return this._renderStats(context);
-      case ViewTab.lineGraph: return this._renderLineGraph(context);
+     // case ViewTab.lineGraph: return this._renderLineGraph(context);
       case ViewTab.pieChart: return this._renderPieChart(context);
 
       default: throw 'Unknown Tab Index: ' + this._selectedTabIndex.index.toString();
@@ -611,8 +659,13 @@ class _ProvincePageState extends State<ProvincePage> with TickerProviderStateMix
   }
 
   void _loadProvinceInfo() {
+    // if latest data load attempt, was a fail.
+    if (this._numLoadSuccess <= 0) {
+      setState(() {
+        this._pageState = PageState.loading;
+      });
+    }
     setState(() {
-      this._state = PageState.loading;
       this._lastLoad = this._loadProvinceInfo;
     });
     
@@ -621,20 +674,27 @@ class _ProvincePageState extends State<ProvincePage> with TickerProviderStateMix
         this.setState(() {
           this._provincesMonthTimeline = data;
           this._selectedMonthTimeline = this._provincesMonthTimeline.last;  // gets the last element (latest).
-          this._state = PageState.success;
+          this._pageState = PageState.success;
+          this._numLoadSuccess++;
         });
       })
       .catchError((error) {
         setState(() {
-          this._state = PageState.error;
+          this._pageState = PageState.error;
           this._error = error;
+          this._numLoadSuccess = 0;
         });
       });
   }
 
   void _loadProvinceMonthlyData() {
+    if (this._numLoadSuccess <= 0) {
+      setState(() {
+        this._pageState = PageState.loading;
+      });
+    }
+
     setState(() {
-      this._state = PageState.loading;
       this._lastLoad = this._loadProvinceMonthlyData;
     });
 
@@ -646,15 +706,16 @@ class _ProvincePageState extends State<ProvincePage> with TickerProviderStateMix
       .then((List<ProvinceTimeline> data) {
         this.setState(() {
           this._provinceMonthDaysTimeline = data;
-          this._state = PageState.success;
-          
+          this._pageState = PageState.success;
+          this._numLoadSuccess++;
         });
        // print(data.map((e) => e.toJson().toString()).toString());
       })
       .catchError((error) {
         setState(() {
-          this._state = PageState.error;
+          this._pageState = PageState.error;
           this._error = error;
+          this._numLoadSuccess = 0;
         });
       });
   }
@@ -676,10 +737,6 @@ class _ProvincePageState extends State<ProvincePage> with TickerProviderStateMix
       default: return '';
     }
   }
-
-  _scaleBetween({@required double unscaledNum, double minAllowed = 0, @required double maxAllowed, double min = 0, @required double max}) {
-    return (maxAllowed - minAllowed) * (unscaledNum - min) / (max - min) + minAllowed;
-  }
 }
 
 enum Index {
@@ -691,7 +748,7 @@ enum Index {
 
 enum ViewTab {
   pieChart,
-  lineGraph,
+ // lineGraph,
   textInfo,
 }
 

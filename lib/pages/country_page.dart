@@ -1,4 +1,6 @@
 
+import 'dart:async';
+
 ///
 /// Marvin Kagiso
 /// 18:10 2020/06/06
@@ -46,31 +48,85 @@ class _CountryPage extends State<CountryPage> {
 
   final countryZa = 'ZA';
   final _coronaApi = CoronaApi();
-  Future<CountryInfo> _countryStatsFuture;
-  Future<List<ProvinceInfo>> _provinceStatsFuture;
+  CountryInfo _countryInfo;
+  List<ProvinceInfo> _provincesInfo;
+  dynamic _httpError;
+  PageState _pageState = PageState.loading;
+  int _numDataLoaded = 0;
+  Timer _timerLoadData;
+  BuildContext _currentContext;
   
 
   @override
 	initState() {
 		super.initState();
-    this._getCoutryStats();
-    this._getProvinceStats();
-		SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-			statusBarColor: Styles.kColourAppPrimary,
-			systemNavigationBarColor: Styles.kColourAppPrimary,
-		));
+    this._setupTimer_loadData();
+    this._loadData();
 	}
 
-  void _getCoutryStats() {
-    setState(() {
-      _countryStatsFuture = this._coronaApi.getCountryStats(isoCode: this.countryZa);
+  @override
+  dispose() {
+    this._closeTimer_loadData();
+    super.dispose();
+  }
+
+  void _setupTimer_loadData() {
+    _timerLoadData ??= Timer.periodic(Duration(seconds: 30), (Timer timer) {
+      Scaffold.of(_currentContext).showSnackBar(SnackBar(
+        content: Text('Refreshing...'),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8.0)
+        ),
+        duration: Duration(seconds: 5),
+        action: SnackBarAction(
+          label: 'OK',
+          onPressed: () {
+            Scaffold.of(_currentContext).hideCurrentSnackBar();
+          },
+        ),
+      ));
+      this._loadData();
     });
   }
 
-  void _getProvinceStats() {
-    setState(() {
-      _provinceStatsFuture = this._coronaApi.getAllCountryProvinceStats(isoCode: this.countryZa);
-    });
+  void _closeTimer_loadData() {
+    if (_timerLoadData != null && _timerLoadData.isActive) {
+      _timerLoadData.cancel();
+      _timerLoadData = null;
+    }
+  }
+
+  void _loadData() {
+
+    // if latest data load attempt, was a fail.
+    if (this._numDataLoaded <= 0) {
+      setState(() {
+        this._pageState = PageState.loading;
+      });
+    }
+
+    Future.wait([
+      this._coronaApi.getCountryStats(isoCode: this.countryZa),
+      this._coronaApi.getAllCountryProvinceStats(isoCode: this.countryZa)
+    ])
+      .then((List results) {
+        final CountryInfo countryStats = results[0];
+        final List<ProvinceInfo> provincesStats = results[1];
+
+        setState(() {
+          this._countryInfo = countryStats;
+          this._provincesInfo = provincesStats;
+          this._pageState = PageState.success;
+          this._numDataLoaded++;
+        });
+      })
+      .catchError((onError) {
+        setState(() {
+          _httpError = onError;
+          this._pageState = PageState.error;
+          this._numDataLoaded = 0;
+        });
+      });
   }
 
   Widget _subheading(String title) {
@@ -111,7 +167,9 @@ class _CountryPage extends State<CountryPage> {
     );
   }
 
-  Widget _countrySummary(BuildContext context, CountryInfo stats) {
+  Widget _countrySummary(BuildContext context) {
+    final CountryInfo stats = this._countryInfo;
+
     return TopContainerWidget(
      // backgroundImage: 'assets/images/zar-flag-md.png',
       child: Column(
@@ -129,8 +187,8 @@ class _CountryPage extends State<CountryPage> {
                 CircularPercentIndicator(
                   radius: 90.0,
                   lineWidth: 5.0,
-                  animation: true,
-                  percent: 0.75,
+                  animation: false,
+                  percent: 1.0,
                   circularStrokeCap: CircularStrokeCap.round,
                   progressColor: Colors.white,
                   backgroundColor: Colors.black26,
@@ -169,57 +227,139 @@ class _CountryPage extends State<CountryPage> {
     );
   }
 
-  Widget _province(CountryInfo countryInfo, ProvinceInfo provinceInfo, BuildContext context) {
+  Widget _province(BuildContext context, ProvinceInfo provinceInfo) {
     return ProvinceInfoWidget(
-      countryInfo: countryInfo,
+      countryInfo: this._countryInfo,
       provinceInfo: provinceInfo,
-      onTap: () => this._gotoProvince(provinceInfo, countryInfo, context),
+      onTap: () => this._gotoProvince(provinceInfo, this._countryInfo, context),
     );
   }
 
-  Widget _provinces(BuildContext context, CountryInfo countryInfo, List<ProvinceInfo> provinces) {
+  Widget _provinces(BuildContext context) {
     int provinceIndex = 0;
 
     // sort in descending order according to Number Of Infections.
-    provinces.sort((ProvinceInfo a, ProvinceInfo b) => b.numInfections.compareTo(a.numInfections));
+    final provinces = [...this._provincesInfo]..sort((ProvinceInfo a, ProvinceInfo b) => b.numInfections.compareTo(a.numInfections));
 
     return Column(
       children: <Widget>[
         Row(
           children: <Widget>[
-            this._province(countryInfo, provinces[provinceIndex++], context),
+            this._province(context, provinces[provinceIndex++]),
           ],
         ),
         Row(
           children: <Widget>[
-            this._province(countryInfo, provinces[provinceIndex++], context),
+            this._province(context, provinces[provinceIndex++]),
             SizedBox(width: 20.0),
-            this._province(countryInfo, provinces[provinceIndex++], context),
+            this._province(context, provinces[provinceIndex++]),
           ],
         ),
         Row(
           children: <Widget>[
-            this._province(countryInfo, provinces[provinceIndex++], context),
+            this._province(context, provinces[provinceIndex++]),
             SizedBox(width: 20.0),
-            this._province(countryInfo, provinces[provinceIndex++], context),
+            this._province(context, provinces[provinceIndex++]),
           ],
         ),
         Row(
           children: <Widget>[
-            this._province(countryInfo, provinces[provinceIndex++], context),
+            this._province(context, provinces[provinceIndex++]),
             SizedBox(width: 20.0),
-            this._province(countryInfo, provinces[provinceIndex++], context),
+            this._province(context, provinces[provinceIndex++]),
           ],
         ),
         Row(
           children: <Widget>[
-            this._province(countryInfo, provinces[provinceIndex++], context),
+            this._province(context, provinces[provinceIndex++]),
             SizedBox(width: 20.0),
-            this._province(countryInfo, provinces[provinceIndex++], context),
+            this._province(context, provinces[provinceIndex++]),
           ],
         ),
       ],
     );
+  }
+
+  Widget _buildBody(BuildContext context) {
+    switch (this._pageState) {
+      case PageState.success:
+
+        return Column(
+          children: <Widget>[
+            this._countrySummary(context),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: <Widget>[
+                    Container(
+                      color: Colors.transparent,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 20.0,
+                        vertical: 10.0
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          _subheading('Provinces'),
+                          SizedBox(height: 5.0),
+                          this._provinces(context),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+    
+
+      case PageState.error:
+      
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                Text(
+                  this._httpError.toString(),
+                  style: TextStyle(
+                    fontSize: 22,
+                    color: Colors.grey,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                SizedBox(height: 32),
+                MaterialButton(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8.0)
+                  ),
+                  color: Styles.kColourAppPrimary,
+                  child: Icon(
+                    Icons.refresh,
+                    color: Styles.kColourAppTextPrimary,
+                  ),
+                  onPressed: (){
+                    this._loadData();
+                  },
+                )
+              ],
+            ),
+          )
+        );
+      
+      case PageState.loading: default:
+
+        return Container(
+          // color: Styles.kColourAppPrimary.withOpacity(0.667),
+          child: Center(
+            child: CircularProgressIndicator(
+              backgroundColor: Styles.kColourAppTextPrimary,
+            )
+          )
+        );
+    }
   }
 
   @override
@@ -227,68 +367,27 @@ class _CountryPage extends State<CountryPage> {
     return Scaffold(
      // backgroundColor: LightColors.kLightYellow,
       //floatingActionButton: AppMenuWidget(),
-      body: SafeArea(
-        child: FutureBuilder(
-          future: Future.wait([
-            this._countryStatsFuture,
-            this._provinceStatsFuture,
-          ]),
-          builder: (BuildContext context, AsyncSnapshot snapshot) {
-            if (snapshot.hasData) {
-              final CountryInfo countryInfo = snapshot.data[0];
-              final List<ProvinceInfo> provincesInfo = snapshot.data[1];
-
-              return Column(
-                children: <Widget>[
-                  this._countrySummary(context, countryInfo),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      child: Column(
-                        children: <Widget>[
-                          Container(
-                            color: Colors.transparent,
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 20.0,
-                              vertical: 10.0
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                _subheading('Provinces'),
-                                SizedBox(height: 5.0),
-                                this._provinces(context, countryInfo, provincesInfo),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            }
-
-            else if (snapshot.hasError) {
-              return Text(snapshot.error.toString(), style: TextStyle(color: Colors.black),);
-            }
-
-            return Container(
-             // color: Styles.kColourAppPrimary.withOpacity(0.667),
-              child: Center(
-                child: CircularProgressIndicator(
-                  backgroundColor: Styles.kColourAppTextPrimary,
-                )
-              )
-            );
-          }
-        )
-      ),
+      body: Builder(
+        builder: (BuildContext context) => SafeArea(
+          child: this._buildBody(_currentContext = context)
+        ),
+      ) 
     );
   }
 
   void _gotoProvince(ProvinceInfo provinceInfo, CountryInfo countryInfo, BuildContext context) {
+    this._closeTimer_loadData();
     Navigator.of(context).push(MaterialPageRoute(builder: (context) {
       return ProvincePage(provinceInfo, countryInfo);
-    }));
+    }))
+      .whenComplete(() {
+        this._setupTimer_loadData();
+      });
   }
+}
+
+enum PageState {
+  loading,
+  success,
+  error,
 }
